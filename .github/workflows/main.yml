@@ -1,0 +1,116 @@
+name: Build Cloudflared Module
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+      cf_version: ${{ steps.check.outputs.cf_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check versions
+        id: check
+        run: |
+          CF_LATEST=$(curl -s https://api.github.com/repos/cloudflare/cloudflared/releases/latest \
+            | jq -r '.tag_name')
+
+          CF_LAST=$(cat .versions/cloudflared 2>/dev/null || echo "none")
+
+          echo "cf_version=$CF_LATEST" >> $GITHUB_OUTPUT
+
+          if [ "$CF_LATEST" != "$CF_LAST" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check-versions
+    if: needs.check-versions.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download cloudflared
+        run: |
+          CF_VER=${{ needs.check-versions.outputs.cf_version }}
+          curl -L "https://github.com/cloudflare/cloudflared/releases/download/${CF_VER}/cloudflared-linux-arm64" \
+            -o cloudflared
+          chmod +x cloudflared
+
+          echo "=== Binary info ==="
+          file cloudflared
+          sha256sum cloudflared
+
+          mkdir -p files
+          cp cloudflared files/cloudflared
+
+      - name: Generate version info
+        run: |
+          CF_VER=${{ needs.check-versions.outputs.cf_version }}
+
+          VERSION_NUMS=${CF_VER#v}
+          YEAR=$(echo $VERSION_NUMS | cut -d. -f1)
+          MAJOR=$(echo $VERSION_NUMS | cut -d. -f2)
+          PATCH=$(echo $VERSION_NUMS | cut -d. -f3)
+          VERSION_CODE=$(( YEAR * 10000 + MAJOR * 100 + PATCH ))
+
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "CF_VER=$CF_VER" >> $GITHUB_ENV
+
+          sed -i "s|__CF_VERSION__|${CF_VER}|g" module.prop
+          sed -i "s|__VERSION_CODE__|${VERSION_CODE}|g" module.prop
+
+          cat module.prop
+
+          mkdir -p dist
+          cat > dist/update.json << EOF
+          {
+            "version": "${CF_VER}",
+            "versionCode": ${VERSION_CODE},
+            "zipUrl": "https://github.com/Sakura-Fubuki76/Vaultwarden-Kernelsu-Module/releases/download/cf-${CF_VER}/cloudflared-module.zip",
+            "changelog": "https://raw.githubusercontent.com/Sakura-Fubuki76/Vaultwarden-Kernelsu-Module/main/dist/changelog.md"
+          }
+          EOF
+
+          cat dist/update.json
+
+          cat > dist/changelog.md << EOF
+          ## ${CF_VER}
+
+          - cloudflared: ${CF_VER}
+          - Built: $(date -u +"%Y-%m-%d %H:%M UTC")
+          EOF
+
+      - name: Pack module
+        run: |
+          zip -r cloudflared-module.zip \
+            META-INF scripts files module.prop service.sh action.sh customize.sh uninstall.sh
+
+          echo "=== Zip contents ==="
+          unzip -l cloudflared-module.zip
+
+      - name: Update versions and dist
+        run: |
+          mkdir -p .versions
+          echo "${{ needs.check-versions.outputs.cf_version }}" > .versions/cloudflared
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add .versions dist/
+          git commit -m "chore: bump cf=${{ needs.check-versions.outputs.cf_version }}"
+          git push
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: cf-${{ needs.check-versions.outputs.cf_version }}
+          name: "Cloudflared ${{ needs.check-versions.outputs.cf_version }}"
+          body: |
+            - cloudflared: ${{ needs.check-versions.outputs.cf_version }}
+          files: cloudflared-module.zip

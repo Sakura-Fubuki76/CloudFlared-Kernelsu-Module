@@ -1,0 +1,7 @@
+id=cloudflared
+name=Cloudflare Tunnel
+version=__CF_VERSION__
+versionCode=__VERSION_CODE__
+author=桜吹雪
+description=Cloudflare Tunnel module for KernelSU
+updateJson=https://raw.githubusercontent.com/Sakura-Fubuki76/Vaultwardem-Kernelsu-Module/main/dist/update.json
