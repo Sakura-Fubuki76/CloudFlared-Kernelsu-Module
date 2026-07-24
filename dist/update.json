@@ -1,6 +1,6 @@
 {
-  "version": "2026.7.2",
-  "versionCode": 20260702,
-  "zipUrl": "https://github.com/Sakura-Fubuki76/Vaultwarden-Kernelsu-Module/releases/download/cf-2026.7.2/cloudflared-module.zip",
+  "version": "2026.7.3",
+  "versionCode": 20260703,
+  "zipUrl": "https://github.com/Sakura-Fubuki76/Vaultwarden-Kernelsu-Module/releases/download/cf-2026.7.3/cloudflared-module.zip",
   "changelog": "https://raw.githubusercontent.com/Sakura-Fubuki76/Vaultwarden-Kernelsu-Module/main/dist/changelog.md"
 }
